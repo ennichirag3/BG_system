@@ -96,16 +96,23 @@ function MainLayout({ children }) {
           </div>
 
           {/* LOGOUT */}
-          <button
-            onClick={() => {
-              localStorage.removeItem("user");
-              localStorage.removeItem("token");
-              navigate("/");
-            }}
-            className="w-full bg-white text-[#5B2EFF] py-4 rounded-2xl font-semibold hover:bg-purple-100 transition shadow-xl"
-          >
-            Logout
-          </button>
+<button
+  onClick={() => {
+
+    localStorage.clear();
+    sessionStorage.clear();
+
+    navigate("/", {
+      replace: true,
+    });
+
+    window.location.reload();
+
+  }}
+  className="w-full bg-white text-[#5B2EFF] py-4 rounded-2xl font-semibold hover:bg-purple-100 transition shadow-xl"
+>
+  Logout
+</button>
 
         </div>
 

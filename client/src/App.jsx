@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 // PAGES
 import Login from "./pages/Login";
@@ -29,27 +30,71 @@ function App() {
 
         {/* DASHBOARD */}
         <Route
-          path="/dashboard"
-          element={<Dashboard />}
-        />
+
+  path="/dashboard"
+
+  element={
+
+    <ProtectedRoute>
+
+      <Dashboard />
+
+    </ProtectedRoute>
+
+  }
+
+/>
 
         {/* BG REQUEST */}
         <Route
-          path="/bg-request"
-          element={<BGRequest />}
-        />
+
+  path="/bg-request"
+
+  element={
+
+    <ProtectedRoute>
+
+      <BGRequest />
+
+    </ProtectedRoute>
+
+  }
+
+/>
 
         {/* APPROVAL */}
         <Route
-          path="/approval"
-          element={<Approval />}
-        />
+
+path="/approval"
+
+element={
+
+  <ProtectedRoute>
+
+    <Approval />
+
+  </ProtectedRoute>
+
+}
+
+/>
 
         {/* REPORTS */}
         <Route
-          path="/reports"
-          element={<Reports />}
-        />
+
+  path="/reports"
+
+  element={
+
+    <ProtectedRoute>
+
+      <Reports />
+
+    </ProtectedRoute>
+
+  }
+
+/>
 
       </Routes>
 
