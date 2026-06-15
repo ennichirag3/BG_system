@@ -6,9 +6,42 @@ function Approval() {
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const ADMIN_PHONE = "9876543210";
+
+const user = JSON.parse(localStorage.getItem("user"));
+const userPhone = user?.phoneNumber || "";
 
   // ✅ remarks per request
   const [remarksMap, setRemarksMap] = useState({});
+  if (userPhone !== ADMIN_PHONE) {
+
+    return (
+
+      <MainLayout>
+
+        <div className="bg-white rounded-3xl p-12 text-center shadow-xl">
+
+          <h1 className="text-4xl font-bold text-red-500">
+
+            Admin Access Only
+
+          </h1>
+
+          <p className="mt-4 text-gray-500">
+
+            Only administrator can access
+
+            Approval Management.
+
+          </p>
+
+        </div>
+
+      </MainLayout>
+
+    );
+
+  }
 
   // FETCH ALL REQUESTS
   const fetchRequests = async () => {
