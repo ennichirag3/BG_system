@@ -149,9 +149,9 @@ const userPhone = user?.phoneNumber || "";
 
                 <tbody>
 
-                  {requests.map((item, index) => (
+                {requests.map((item, index) => (
 
-                    <>
+<React.Fragment key={item._id}>
                       {/* MAIN ROW */}
                       <tr
   key={item._id}
@@ -204,27 +204,45 @@ const userPhone = user?.phoneNumber || "";
                         {/* ACTIONS */}
                         <td className="p-5">
 
-                          <div className="flex gap-3">
+                        {item.status === "Pending" ? (
 
-                            <button
-                              onClick={() =>
-                                updateStatus(item._id, "Approved")
-                              }
-                              className="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-xl text-sm"
-                            >
-                              Approve
-                            </button>
+<div className="flex gap-3">
 
-                            <button
-                              onClick={() =>
-                                updateStatus(item._id, "Rejected")
-                              }
-                              className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm"
-                            >
-                              Reject
-                            </button>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      updateStatus(item._id, "Approved");
+    }}
+    className="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-xl text-sm"
+  >
+    Approve
+  </button>
 
-                          </div>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      updateStatus(item._id, "Rejected");
+    }}
+    className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm"
+  >
+    Reject
+  </button>
+
+</div>
+
+) : (
+
+<span
+  className={`font-semibold ${
+    item.status === "Approved"
+      ? "text-green-600"
+      : "text-red-600"
+  }`}
+>
+  {item.status} ✓ Locked
+</span>
+
+)}
 
                         </td>
 
@@ -307,7 +325,7 @@ const userPhone = user?.phoneNumber || "";
     </td>
   </tr>
 )}
-                    </>
+                   </React.Fragment>
 
                   ))}
 
