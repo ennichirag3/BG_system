@@ -3,7 +3,7 @@ import MainLayout from "../layouts/MainLayout";
 import API from "../services/api";
 
 function Approval() {
-
+  const [expandedRow, setExpandedRow] = useState(null);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const ADMIN_PHONE = "9876543210";
@@ -154,9 +154,16 @@ const userPhone = user?.phoneNumber || "";
                     <>
                       {/* MAIN ROW */}
                       <tr
-                        key={item._id}
-                        className="border-b border-gray-100 hover:bg-purple-50/40"
-                      >
+  key={item._id}
+  onClick={() =>
+    setExpandedRow(
+      expandedRow === item._id
+        ? null
+        : item._id
+    )
+  }
+  className="border-b border-gray-100 hover:bg-purple-50/40 cursor-pointer"
+>
 
                         <td className="p-5 font-semibold">#{index + 1}</td>
                         <td className="p-5">{item.department}</td>
@@ -224,87 +231,82 @@ const userPhone = user?.phoneNumber || "";
                       </tr>
 
                      {/* EXTRA DETAILS ROW */}
-<tr className="bg-gray-50 text-sm text-gray-600">
+{expandedRow === item._id && (
+  <tr className="bg-gray-50">
+    <td colSpan="7" className="p-6">
 
-<td colSpan="7" className="p-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
-  {/* BASIC INFO */}
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <p><b>Location:</b> {item.location}</p>
+        <p><b>Work Order:</b> {item.workOrderNo}</p>
+        <p><b>Party:</b> {item.partyName}</p>
+        <p><b>BG Type:</b> {item.natureOfBG}</p>
+        <p><b>Claim Period:</b> {item.claimPeriod}</p>
+        <p><b>Expiry:</b> {item.bgExpiryDate}</p>
+        <p><b>Request Date:</b> {item.dateOfRequest}</p>
+        <p><b>Superior:</b> {item.superiorName}</p>
 
-    <p><b>Location:</b> {item.location}</p>
-    <p><b>Work Order:</b> {item.workOrderNo}</p>
-    <p><b>Party:</b> {item.partyName}</p>
-    <p><b>BG Type:</b> {item.natureOfBG}</p>
-    <p><b>Claim Period:</b> {item.claimPeriod}</p>
-    <p><b>Expiry:</b> {item.bgExpiryDate}</p>
-    <p><b>Request Date:</b> {item.dateOfRequest}</p>
-    <p><b>Superior:</b> {item.superiorName}</p>
+      </div>
 
-  </div>
+      <div className="mt-5 border-t pt-4">
 
-  {/* DOCUMENTS */}
-  <div className="mt-5 border-t pt-4">
+        <h3 className="font-semibold text-gray-700 mb-3">
+          Uploaded Documents
+        </h3>
 
-    <h3 className="font-semibold text-gray-700 mb-3">
-      Uploaded Documents
-    </h3>
+        <div className="flex flex-wrap gap-3">
 
-    <div className="flex flex-wrap gap-3">
+          {item.bgDraft && (
+            <a
+              href={`https://bg-system-3.onrender.com/${item.bgDraft}`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-white border rounded-xl shadow-sm"
+            >
+              📄 BG Draft
+            </a>
+          )}
 
-      {/* BG DRAFT */}
-      {item.bgDraft && (
-        <a
-          href={`http://localhost:8000/${item.bgDraft}`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-4 py-2 bg-white border rounded-xl shadow-sm hover:bg-purple-50 transition"
-        >
-          📄 BG Draft
-        </a>
-      )}
+          {item.approvalFile && (
+            <a
+              href={`https://bg-system-3.onrender.com/${item.approvalFile}`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-white border rounded-xl shadow-sm"
+            >
+              📄 Approval File
+            </a>
+          )}
 
-      {/* APPROVAL FILE */}
-      {item.approvalFile && (
-        <a
-          href={`http://localhost:8000/${item.approvalFile}`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-4 py-2 bg-white border rounded-xl shadow-sm hover:bg-purple-50 transition"
-        >
-          📄 Approval File
-        </a>
-      )}
+          {item.beneficiaryClause && (
+            <a
+              href={`https://bg-system-3.onrender.com/${item.beneficiaryClause}`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-white border rounded-xl shadow-sm"
+            >
+              📄 Beneficiary Clause
+            </a>
+          )}
 
-      {/* BENEFICIARY CLAUSE */}
-      {item.beneficiaryClause && (
-        <a
-          href={`http://localhost:8000/${item.beneficiaryClause}`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-4 py-2 bg-white border rounded-xl shadow-sm hover:bg-purple-50 transition"
-        >
-          📄 Beneficiary Clause
-        </a>
-      )}
+          {item.bankDetails && (
+            <a
+              href={`https://bg-system-3.onrender.com/${item.bankDetails}`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-white border rounded-xl shadow-sm"
+            >
+              📄 Bank Details
+            </a>
+          )}
 
-      {/* BANK DETAILS */}
-      {item.bankDetails && (
-        <a
-          href={`http://localhost:8000/${item.bankDetails}`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-4 py-2 bg-white border rounded-xl shadow-sm hover:bg-purple-50 transition"
-        >
-          📄 Bank Details
-        </a>
-      )}
+        </div>
 
-    </div>
+      </div>
 
-  </div>
-
-</td>
-</tr>
+    </td>
+  </tr>
+)}
                     </>
 
                   ))}
