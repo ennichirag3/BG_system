@@ -239,7 +239,7 @@ const userPhone = user?.phoneNumber || "";
       : "text-red-600"
   }`}
 >
-  {item.status} ✓ Locked
+  {item.status} 
 </span>
 
 )}
