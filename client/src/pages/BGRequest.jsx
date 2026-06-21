@@ -161,13 +161,14 @@ function BGRequest() {
       });
 
     } catch (error) {
-
-      console.log(error);
-
-      alert("Failed to submit request");
-
+      console.log("ERROR:", error);
+      console.log("RESPONSE:", error.response?.data);
+    
+      alert(
+        JSON.stringify(error.response?.data) ||
+        error.message
+      );
     }
-
   };
 
   return (
