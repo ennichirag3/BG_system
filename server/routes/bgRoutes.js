@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const BGRequest = require("../models/BGRequest");
+const db = require("../config/db");
 const multer = require("multer");
 
 // ==========================================
@@ -11,7 +11,7 @@ const upload = multer({
 });
 
 // ==========================================
-// CREATE BG REQUEST (FILE SUPPORT)
+// CREATE BG REQUEST
 // ==========================================
 router.post(
   "/create",
@@ -22,90 +22,96 @@ router.post(
     { name: "bankDetails", maxCount: 1 },
   ]),
   async (req, res) => {
-
     try {
-
       console.log("🔥 CREATE REQUEST BODY:", req.body);
 
-      console.log("📎 FILES:", req.files);
+      const _id = "bg-" + Date.now();
+      const {
+        department = "General",
+        location = "Default",
+        dateOfRequest = new Date().toISOString().split("T")[0],
+        workOrderNo = "",
+        typeOfWork = "",
+        jobValue = 0,
+        requesterName = "",
+        superiorName = "",
+        partyName = "",
+        natureOfBG = "Performance BG",
+        bgAmount = 0,
+        bgExpiryDate = "",
+        claimPeriod = "",
+        remarks = "",
+      } = req.body;
 
-      const newRequest = new BGRequest({
+      const bgDraft = req.files?.bgDraft?.[0]?.path || "";
+      const approvalFile = req.files?.approvalFile?.[0]?.path || "";
+      const beneficiaryClause = req.files?.beneficiaryClause?.[0]?.path || "";
+      const bankDetails = req.files?.bankDetails?.[0]?.path || "";
 
-        ...req.body,
+      const stmt = db.prepare(`
+        INSERT INTO bg_requests (
+          _id, department, location, dateOfRequest, workOrderNo, typeOfWork,
+          jobValue, requesterName, superiorName, partyName, natureOfBG,
+          bgAmount, bgExpiryDate, claimPeriod, remarks, status,
+          bgDraft, approvalFile, beneficiaryClause, bankDetails
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?
+        )
+      `);
 
-        // FILE PATHS
-        bgDraft:
-          req.files?.bgDraft?.[0]?.path || "",
+      stmt.run(
+        _id,
+        department,
+        location,
+        dateOfRequest,
+        workOrderNo,
+        typeOfWork,
+        Number(jobValue),
+        requesterName,
+        superiorName,
+        partyName,
+        natureOfBG,
+        Number(bgAmount),
+        bgExpiryDate,
+        claimPeriod,
+        remarks,
+        bgDraft,
+        approvalFile,
+        beneficiaryClause,
+        bankDetails
+      );
 
-        approvalFile:
-          req.files?.approvalFile?.[0]?.path || "",
+      const savedRequest = db.prepare("SELECT * FROM bg_requests WHERE _id = ?").get(_id);
 
-        beneficiaryClause:
-          req.files?.beneficiaryClause?.[0]?.path || "",
-
-        bankDetails:
-          req.files?.bankDetails?.[0]?.path || "",
-
-      });
-
-      const savedRequest = await newRequest.save();
-
-      console.log("✅ SAVED TO DB:", savedRequest);
+      console.log("✅ SAVED TO SQLITE:", savedRequest);
 
       return res.status(201).json({
         success: true,
-        message: "BG Request Created Successfully",
+        message: "BG Request Created Successfully in SQLite",
         data: savedRequest,
       });
-
     } catch (error) {
-
       console.log("❌ CREATE ERROR:", error);
-
       return res.status(500).json({
         success: false,
         message: error.message,
-        error: error.errors || null,
       });
-
     }
-
   }
 );
 
 // ==========================================
 // DASHBOARD STATS
 // ==========================================
-router.get("/stats/dashboard", async (req, res) => {
-
+router.get("/stats/dashboard", (req, res) => {
   try {
-
-    const totalRequests =
-      await BGRequest.countDocuments();
-
-    const approvedRequests =
-      await BGRequest.countDocuments({
-        status: "Approved",
-      });
-
-    const rejectedRequests =
-      await BGRequest.countDocuments({
-        status: "Rejected",
-      });
-
-    const pendingRequests =
-      await BGRequest.countDocuments({
-        status: "Pending",
-      });
-
-    const allRequests =
-      await BGRequest.find();
-
-    const totalBGAmount = allRequests.reduce(
-      (sum, item) =>
-        sum + Number(item.bgAmount || 0),
-      0
-    );
+    const totalRequests = db.prepare("SELECT COUNT(*) AS count FROM bg_requests").get().count;
+    const approvedRequests = db.prepare("SELECT COUNT(*) AS count FROM bg_requests WHERE status = 'Approved'").get().count;
+    const rejectedRequests = db.prepare("SELECT COUNT(*) AS count FROM bg_requests WHERE status = 'Rejected'").get().count;
+    const pendingRequests = db.prepare("SELECT COUNT(*) AS count FROM bg_requests WHERE status = 'Pending'").get().count;
+    
+    const amountRow = db.prepare("SELECT SUM(bgAmount) AS total FROM bg_requests").get();
+    const totalBGAmount = amountRow?.total || 0;
 
     return res.status(200).json({
       success: true,
@@ -117,160 +123,116 @@ router.get("/stats/dashboard", async (req, res) => {
         totalBGAmount,
       },
     });
-
   } catch (error) {
-
     console.log("❌ DASHBOARD ERROR:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
-
 });
 
 // ==========================================
 // GET ALL BG REQUESTS
 // ==========================================
-router.get("/", async (req, res) => {
-
+router.get("/", (req, res) => {
   try {
-
-    const requests = await BGRequest.find().sort({
-      createdAt: -1,
-    });
-
+    const requests = db.prepare("SELECT * FROM bg_requests ORDER BY createdAt DESC").all();
     return res.status(200).json({
       success: true,
       data: requests,
     });
-
   } catch (error) {
-
     console.log("❌ GET ERROR:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
-
 });
 
 // ==========================================
 // GET SINGLE REQUEST
 // ==========================================
-router.get("/:id", async (req, res) => {
-
+router.get("/:id", (req, res) => {
   try {
-
-    const request = await BGRequest.findById(
+    const request = db.prepare("SELECT * FROM bg_requests WHERE _id = ? OR id = ?").get(
+      req.params.id,
       req.params.id
     );
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Request not found",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       data: request,
     });
-
   } catch (error) {
-
     console.log("❌ SINGLE GET ERROR:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
-
 });
 
 // ==========================================
 // UPDATE STATUS
 // ==========================================
-router.put("/:id/status", async (req, res) => {
-
+router.put("/:id/status", (req, res) => {
   try {
+    const bgRequest = db.prepare("SELECT * FROM bg_requests WHERE _id = ? OR id = ?").get(
+      req.params.id,
+      req.params.id
+    );
 
-    const updatedRequest =
-      await BGRequest.findByIdAndUpdate(
-        req.params.id,
-        {
-          status: req.body.status,
-        },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
+    if (!bgRequest) {
+      return res.status(404).json({
+        success: false,
+        message: "Request not found",
+      });
+    }
+
+    const newStatus = req.body.status || bgRequest.status;
+    const newRemarks = req.body.remarks !== undefined ? req.body.remarks : bgRequest.remarks;
+
+    db.prepare(`
+      UPDATE bg_requests
+      SET status = ?, remarks = ?, updatedAt = CURRENT_TIMESTAMP
+      WHERE _id = ? OR id = ?
+    `).run(newStatus, newRemarks, req.params.id, req.params.id);
+
+    const updated = db.prepare("SELECT * FROM bg_requests WHERE _id = ? OR id = ?").get(
+      req.params.id,
+      req.params.id
+    );
 
     return res.status(200).json({
       success: true,
       message: "Status Updated Successfully",
-      data: updatedRequest,
+      data: updated,
     });
-
   } catch (error) {
-
     console.log("❌ STATUS UPDATE ERROR:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
-
-});
-
-// ==========================================
-// UPDATE FULL REQUEST
-// ==========================================
-router.put("/:id", async (req, res) => {
-
-  try {
-
-    const updatedRequest =
-      await BGRequest.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-
-    return res.status(200).json({
-      success: true,
-      message: "Request Updated Successfully",
-      data: updatedRequest,
-    });
-
-  } catch (error) {
-
-    console.log("❌ UPDATE ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-
-  }
-
 });
 
 // ==========================================
 // DELETE REQUEST
 // ==========================================
-router.delete("/:id", async (req, res) => {
-
+router.delete("/:id", (req, res) => {
   try {
-
-    await BGRequest.findByIdAndDelete(
+    db.prepare("DELETE FROM bg_requests WHERE _id = ? OR id = ?").run(
+      req.params.id,
       req.params.id
     );
 
@@ -278,18 +240,13 @@ router.delete("/:id", async (req, res) => {
       success: true,
       message: "Request Deleted Successfully",
     });
-
   } catch (error) {
-
     console.log("❌ DELETE ERROR:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message,
     });
-
   }
-
 });
 
 module.exports = router;

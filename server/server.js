@@ -1,32 +1,37 @@
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose");
 require("dotenv").config();
 
+// SQLITE DATABASE INITIALIZATION
+const db = require("./config/db");
+
 const bgRoutes = require("./routes/bgRoutes");
-const authRoutes = require("./routes/authRoutes"); // ✅ ADDED
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
 // =======================
-// CORS
+// CORS FIX
 // =======================
-app.use(cors({
-  origin: "*",
-}));
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  })
+);
 
 // =======================
-// JSON BODY PARSER
+// BODY PARSER
 // =======================
 app.use(express.json());
 
 // =======================
-// STATIC FILES (uploads)
+// STATIC FILES
 // =======================
 app.use("/uploads", express.static("uploads"));
 
 // =======================
-// DEBUG MIDDLEWARE
+// LOGGING
 // =======================
 app.use((req, res, next) => {
   console.log("REQUEST:", req.method, req.url);
@@ -34,37 +39,46 @@ app.use((req, res, next) => {
 });
 
 // =======================
-// TEST ROUTE
+// HEALTH CHECK
 // =======================
 app.get("/", (req, res) => {
   res.json({
-    message: "Backend working",
+    message: "BG Management Backend Working (SQLite)",
+    database: "SQLite3 (Local Persistent)",
+    status: "online",
   });
 });
 
 // =======================
 // ROUTES
 // =======================
-app.use("/api/bg", bgRoutes);       // BG SYSTEM ROUTES
-app.use("/api/auth", authRoutes);   // 🔐 AUTH ROUTES (NEW)
+app.use("/api/bg", bgRoutes);
+app.use("/api/auth", authRoutes);
 
 // =======================
-// DATABASE CONNECTION
-// =======================
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB Connected");
-  })
-  .catch((err) => {
-    console.log("MongoDB Error:", err.message);
-  });
-
-// =======================
-// SERVER PORT
+// START SERVER
 // =======================
 const PORT = process.env.PORT || 8000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`🚀 SQLite Server running on port ${PORT}`);
 });
+
+// =======================
+// GRACEFUL SHUTDOWN (Clean SQLite close)
+// =======================
+const cleanExit = () => {
+  console.log("\n🔒 Closing SQLite database connection cleanly...");
+  try {
+    db.close();
+    console.log("✅ Database closed.");
+  } catch (err) {
+    console.error("Error closing DB:", err);
+  }
+  server.close(() => {
+    process.exit(0);
+  });
+};
+
+process.on("SIGINT", cleanExit);
+process.on("SIGTERM", cleanExit);
