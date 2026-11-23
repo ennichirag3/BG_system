@@ -8,101 +8,96 @@
 
   body {
     margin: 0;
-    background-color: #040806;
-    color: #e5f6ee;
+    background-color: #070913;
+    color: #f1f5f9;
     overflow-x: hidden;
   }
 
-  /* Custom Smooth Neon Scrollbar */
+  /* Custom Smooth 3D Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #060e0a;
+    background: #0b0f1d;
   }
   ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #00ff88, #059669);
+    background: linear-gradient(180deg, #6366f1, #06b6d4);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #00ff88;
-    box-shadow: 0 0 10px #00ff88;
+    background: #818cf8;
+    box-shadow: 0 0 12px #6366f1;
   }
 }
 
-/* Cyber Emerald Glow & Motion Utility Classes */
-.cyber-panel {
-  background: rgba(6, 17, 12, 0.72);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 255, 136, 0.18);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+/* Glass & 3D Utility Classes */
+.bg-glass-card {
+  background: rgba(14, 19, 36, 0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+  transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.cyber-panel-glow {
-  background: rgba(6, 20, 14, 0.82);
+.bg-glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 16px 36px -10px rgba(99, 102, 241, 0.25);
+}
+
+.bg-glass-card-glow {
+  background: rgba(16, 22, 42, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 255, 136, 0.35);
-  box-shadow: 0 0 25px rgba(0, 255, 136, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.btn-neon-solid {
-  background-color: #00ff88;
-  color: #03150b;
-  font-weight: 700;
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.45);
-  transition: all 0.2s ease;
+.btn-primary-3d {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.btn-neon-solid:hover {
-  background-color: #34d399;
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.7);
-  transform: translateY(-1px);
+.btn-primary-3d:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+  transform: translateY(-1.5px);
 }
 
-.btn-neon-solid:active {
+.btn-primary-3d:active {
   transform: translateY(0);
 }
 
-.btn-neon-outline {
-  background: rgba(0, 255, 136, 0.08);
-  border: 1px solid rgba(0, 255, 136, 0.4);
-  color: #00ff88;
+.btn-outline-3d {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
   transition: all 0.2s ease;
 }
 
-.btn-neon-outline:hover {
-  background: rgba(0, 255, 136, 0.18);
-  border-color: #00ff88;
-  box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+.btn-outline-3d:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #818cf8;
+  color: #ffffff;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
 }
 
-.badge-agent {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background: rgba(0, 255, 136, 0.12);
-  color: #00ff88;
-  border: 1px solid rgba(0, 255, 136, 0.35);
-}
-
-/* Smooth Fade In Animation */
-@keyframes fadeIn {
+/* Smooth Page Transitions */
+@keyframes pageSlideIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px) scale(0.995);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-.animate-fadeIn {
-  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.animate-page-enter {
+  animation: pageSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

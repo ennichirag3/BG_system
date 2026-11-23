@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 
 export default function Interactive3DScene({
-  density = 65,
-  accent = "#00ff88",
+  density = 60,
   interactive = true,
   className = "fixed inset-0 pointer-events-none z-0",
 }) {
@@ -24,7 +23,7 @@ export default function Interactive3DScene({
     };
     window.addEventListener("resize", handleResize);
 
-    // Mouse tracking with 3D easing
+    // Mouse tracking with 3D parallax easing
     const mouse = {
       x: width / 2,
       y: height / 2,
@@ -48,33 +47,31 @@ export default function Interactive3DScene({
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
 
-    // Multi-depth 3D Particles & Bokeh Orbs
+    // Multi-depth 3D Particles & Bokeh Orbs (Indigo, Cyan, Violet, Emerald)
     const particles = [];
     const colorPalette = [
-      "rgba(0, 255, 136, ",
-      "rgba(16, 185, 129, ",
-      "rgba(5, 240, 160, ",
-      "rgba(52, 211, 153, ",
-      "rgba(0, 229, 117, ",
+      { r: 99, g: 102, b: 241 },   // Indigo
+      { r: 6, g: 182, b: 212 },    // Cyan
+      { r: 139, g: 92, b: 246 },   // Violet
+      { r: 16, g: 185, b: 129 },   // Emerald
+      { r: 129, g: 140, b: 248 },  // Soft Indigo
     ];
 
     for (let i = 0; i < density; i++) {
-      // Depth layer: 0 (deep background bokeh) to 1 (sharp foreground)
-      const depth = Math.random();
-      const isBokeh = depth < 0.28; // Large out-of-focus bokeh disc
+      const depth = Math.random(); // 0: far background bokeh, 1: foreground sharp
+      const isBokeh = depth < 0.32; // Large out-of-focus bokeh disc
+      const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
 
       particles.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        baseX: Math.random() * width,
-        baseY: Math.random() * height,
         z: depth,
-        radius: isBokeh ? Math.random() * 22 + 12 : Math.random() * 2.8 + 1.2,
-        colorBase: colorPalette[Math.floor(Math.random() * colorPalette.length)],
-        baseAlpha: isBokeh ? Math.random() * 0.14 + 0.05 : Math.random() * 0.55 + 0.25,
-        vx: (Math.random() - 0.5) * (0.35 + depth * 0.4),
-        vy: (Math.random() - 0.5) * (0.35 + depth * 0.4),
-        pulseSpeed: Math.random() * 0.02 + 0.01,
+        radius: isBokeh ? Math.random() * 26 + 14 : Math.random() * 3 + 1,
+        color,
+        baseAlpha: isBokeh ? Math.random() * 0.16 + 0.04 : Math.random() * 0.6 + 0.2,
+        vx: (Math.random() - 0.5) * (0.3 + depth * 0.35),
+        vy: (Math.random() - 0.5) * (0.3 + depth * 0.35),
+        pulseSpeed: Math.random() * 0.02 + 0.008,
         pulseOffset: Math.random() * Math.PI * 2,
         isBokeh,
       });
@@ -93,15 +90,15 @@ export default function Interactive3DScene({
       const mouseNormX = (mouse.x - width / 2) / (width / 2);
       const mouseNormY = (mouse.y - height / 2) / (height / 2);
 
-      time += 0.02;
+      time += 0.015;
 
-      // Draw subtle background radial glow
-      const cx = width * 0.5 + mouseNormX * 40;
-      const cy = height * 0.4 + mouseNormY * 40;
-      const bgGrad = ctx.createRadialGradient(cx, cy, 20, cx, cy, width * 0.65);
-      bgGrad.addColorStop(0, "rgba(0, 255, 136, 0.045)");
-      bgGrad.addColorStop(0.5, "rgba(5, 15, 10, 0.2)");
-      bgGrad.addColorStop(1, "rgba(4, 8, 6, 0)");
+      // Soft ambient radial glow
+      const cx = width * 0.5 + mouseNormX * 35;
+      const cy = height * 0.45 + mouseNormY * 35;
+      const bgGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, width * 0.7);
+      bgGrad.addColorStop(0, "rgba(99, 102, 241, 0.06)");
+      bgGrad.addColorStop(0.5, "rgba(6, 182, 212, 0.03)");
+      bgGrad.addColorStop(1, "rgba(7, 9, 19, 0)");
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, width, height);
 
@@ -112,7 +109,6 @@ export default function Interactive3DScene({
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
-        // Drift motion
         p.x += p.vx;
         p.y += p.vy;
 
@@ -123,59 +119,57 @@ export default function Interactive3DScene({
         if (p.y > height + 60) p.y = -60;
 
         // 3D Parallax offset based on depth (z)
-        const parallaxX = mouseNormX * p.z * 55;
-        const parallaxY = mouseNormY * p.z * 55 - (scrollY * p.z * 0.25) % height;
+        const parallaxX = mouseNormX * p.z * 50;
+        const parallaxY = mouseNormY * p.z * 50 - (scrollY * p.z * 0.22) % height;
 
         let drawX = p.x + parallaxX;
         let drawY = p.y + parallaxY;
 
-        // Keep inside screen bounds smoothly
         if (drawY < -50) drawY += height + 100;
         if (drawY > height + 50) drawY -= height + 100;
 
-        // Pulsing glow alpha
         const pulse = Math.sin(time * p.pulseSpeed * 60 + p.pulseOffset);
-        const currentAlpha = Math.max(0.02, p.baseAlpha + pulse * 0.15);
+        const currentAlpha = Math.max(0.02, p.baseAlpha + pulse * 0.12);
 
         ctx.beginPath();
 
         if (p.isBokeh) {
           // Large soft bokeh disc with radial gradient falloff
-          const rad = p.radius * (1 + pulse * 0.1);
+          const rad = p.radius * (1 + pulse * 0.08);
           const grad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, rad);
-          grad.addColorStop(0, `${p.colorBase}${currentAlpha * 1.4})`);
-          grad.addColorStop(0.4, `${p.colorBase}${currentAlpha * 0.7})`);
-          grad.addColorStop(1, `${p.colorBase}0)`);
+          grad.addColorStop(0, `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${currentAlpha * 1.5})`);
+          grad.addColorStop(0.4, `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${currentAlpha * 0.7})`);
+          grad.addColorStop(1, `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, 0)`);
           ctx.fillStyle = grad;
           ctx.arc(drawX, drawY, rad, 0, Math.PI * 2);
           ctx.fill();
         } else {
           // Sharp glowing particle with neon core
-          const rad = p.radius * (1 + p.z * 0.6);
+          const rad = p.radius * (1 + p.z * 0.5);
           ctx.arc(drawX, drawY, rad, 0, Math.PI * 2);
-          ctx.fillStyle = `${p.colorBase}${currentAlpha})`;
-          ctx.shadowBlur = 10 * p.z;
-          ctx.shadowColor = accent;
+          ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${currentAlpha})`;
+          ctx.shadowBlur = 8 * p.z;
+          ctx.shadowColor = `rgb(${p.color.r}, ${p.color.g}, ${p.color.b})`;
           ctx.fill();
           ctx.shadowBlur = 0;
         }
 
         // Draw connections between nearby mid/foreground particles
-        if (!p.isBokeh && p.z > 0.4) {
+        if (!p.isBokeh && p.z > 0.45) {
           for (let j = i + 1; j < particles.length; j++) {
             const p2 = particles[j];
-            if (!p2.isBokeh && p2.z > 0.4) {
-              const dx = drawX - (p2.x + mouseNormX * p2.z * 55);
-              const dy = drawY - (p2.y + mouseNormY * p2.z * 55 - (scrollY * p2.z * 0.25) % height);
+            if (!p2.isBokeh && p2.z > 0.45) {
+              const dx = drawX - (p2.x + mouseNormX * p2.z * 50);
+              const dy = drawY - (p2.y + mouseNormY * p2.z * 50 - (scrollY * p2.z * 0.22) % height);
               const dist = Math.hypot(dx, dy);
 
-              if (dist < 90) {
-                const connAlpha = (1 - dist / 90) * 0.12 * p.z;
+              if (dist < 85) {
+                const connAlpha = (1 - dist / 85) * 0.15 * p.z;
                 ctx.beginPath();
                 ctx.moveTo(drawX, drawY);
                 ctx.lineTo(drawX - dx, drawY - dy);
-                ctx.strokeStyle = `rgba(0, 255, 136, ${connAlpha})`;
-                ctx.lineWidth = 0.8;
+                ctx.strokeStyle = `rgba(99, 102, 241, ${connAlpha})`;
+                ctx.lineWidth = 0.7;
                 ctx.stroke();
               }
             }
@@ -196,7 +190,7 @@ export default function Interactive3DScene({
       }
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [density, accent, interactive]);
+  }, [density, interactive]);
 
   return <canvas ref={canvasRef} className={className} />;
 }

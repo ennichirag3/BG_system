@@ -3,7 +3,7 @@ import { useState, useRef } from "react";
 export default function TiltCard({
   children,
   className = "",
-  maxTilt = 8,
+  maxTilt = 7,
   glare = true,
   onClick,
 }) {
@@ -26,7 +26,7 @@ export default function TiltCard({
     setGlarePos({
       x: (x / rect.width) * 100,
       y: (y / rect.height) * 100,
-      opacity: 0.18,
+      opacity: 0.15,
     });
   };
 
@@ -53,7 +53,7 @@ export default function TiltCard({
           className="pointer-events-none absolute inset-0 z-30 transition-opacity duration-300"
           style={{
             opacity: glarePos.opacity,
-            background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(0,255,136,0.3) 0%, rgba(0,255,136,0) 60%)`,
+            background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 65%)`,
           }}
         />
       )}

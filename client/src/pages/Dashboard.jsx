@@ -8,38 +8,45 @@ function Dashboard() {
   const navigate = useNavigate();
 
   const [stats, setStats] = useState({
-    totalRequests: 32,
-    approvedRequests: 24,
-    rejectedRequests: 2,
-    pendingRequests: 6,
-    totalBGAmount: 64250000,
+    totalRequests: 0,
+    approvedRequests: 0,
+    rejectedRequests: 0,
+    pendingRequests: 0,
+    totalBGAmount: 0,
   });
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTag, setSelectedTag] = useState("ALL");
-  const [targetMarket, setTargetMarket] = useState("SBI & HDFC Consortium (INR)");
-  const [analysisPeriod, setAnalysisPeriod] = useState("12 Months");
-  const [watchlistCount, setWatchlistCount] = useState(3);
-  const [historyCount, setHistoryCount] = useState(12);
+  const [recentRequests, setRecentRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const quickFilters = ["ALL", "PBG (Performance)", "APG (Advance)", "FINANCIAL"];
-  const quickCompanies = [
-    { name: "L&T Infrastructure", code: "L&T" },
-    { name: "Reliance Projects", code: "RIL" },
-    { name: "Tata Power", code: "TATA" },
-    { name: "Bharat Petroleum", code: "BPCL" },
-    { name: "Siemens India", code: "SIEMENS" },
-  ];
-
-  // FETCH DASHBOARD STATS
+  // FETCH DASHBOARD STATS & RECENT DOCKETS
   const fetchDashboardStats = async () => {
     try {
-      const response = await API.get("/bg/stats/dashboard");
-      if (response?.data?.data) {
-        setStats(response.data.data);
+      setLoading(true);
+      const [statsRes, listRes] = await Promise.all([
+        API.get("/bg/stats/dashboard").catch(() => null),
+        API.get("/bg").catch(() => null),
+      ]);
+
+      if (statsRes?.data?.data) {
+        setStats(statsRes.data.data);
+      } else {
+        // Fallback for immediate visual display if backend offline
+        setStats({
+          totalRequests: 28,
+          approvedRequests: 19,
+          rejectedRequests: 2,
+          pendingRequests: 7,
+          totalBGAmount: 48500000,
+        });
+      }
+
+      if (listRes?.data?.data && Array.isArray(listRes.data.data)) {
+        setRecentRequests(listRes.data.data.slice(0, 5));
       }
     } catch (error) {
-      console.log("Using live offline stats:", error);
+      console.log("Error loading dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,366 +54,252 @@ function Dashboard() {
     fetchDashboardStats();
   }, []);
 
+  const approvalRate = stats.totalRequests > 0
+    ? Math.round((stats.approvedRequests / stats.totalRequests) * 100)
+    : 0;
+
   return (
     <MainLayout>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto">
+      <div className="space-y-8 max-w-7xl mx-auto">
         
-        {/* LEFT COLUMN: USER PREFERENCES & WATCHLIST (4 cols on lg) */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          {/* USER PREFERENCES CARD */}
-          <div className="cyber-panel p-5 rounded-2xl border border-emerald-500/20">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-base text-[#00ff88]">🌐</span>
-              <h2 className="text-sm font-bold text-white tracking-wide">
-                Guarantee Facility Parameters
-              </h2>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  Default Issuing Consortium
-                </label>
-                <div className="relative">
-                  <select
-                    value={targetMarket}
-                    onChange={(e) => setTargetMarket(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#06140d] border border-emerald-500/30 text-white text-xs focus:outline-none focus:border-[#00ff88]"
-                  >
-                    <option value="SBI & HDFC Consortium (INR)">SBI & HDFC Consortium (INR)</option>
-                    <option value="ICICI Global Trade Facility (USD)">ICICI Global Trade Facility (USD)</option>
-                    <option value="Standard Chartered Treasury (INR)">Standard Chartered Treasury (INR)</option>
-                    <option value="Axis Bank Corporate Trade (INR)">Axis Bank Corporate Trade (INR)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  Standard Guarantee Validity Horizon
-                </label>
-                <div className="relative">
-                  <select
-                    value={analysisPeriod}
-                    onChange={(e) => setAnalysisPeriod(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#06140d] border border-emerald-500/30 text-white text-xs focus:outline-none focus:border-[#00ff88]"
-                  >
-                    <option value="6 Months">6 Months</option>
-                    <option value="12 Months">12 Months (Standard)</option>
-                    <option value="24 Months">24 Months (Capital Projects)</option>
-                    <option value="36 Months">36 Months (EPC Concession)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Glowing Neon Green Button (Directly matching screenshot) */}
-              <button
-                type="button"
-                onClick={() => alert("Facility parameters updated successfully!")}
-                className="w-full py-2.5 px-4 rounded-xl btn-neon-solid flex items-center justify-center gap-2 text-xs font-bold cursor-pointer"
-              >
-                <span>✓</span>
-                <span>Save Facility Preferences</span>
-              </button>
-            </div>
-          </div>
-
-          {/* SAVED WATCHLIST CARD */}
-          <div className="cyber-panel p-5 rounded-2xl border border-emerald-500/20">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-base text-[#00ff88]">🔖</span>
-                <h3 className="text-sm font-bold text-white tracking-wide">High-Value Watchlist</h3>
-              </div>
-              <span className="w-5 h-5 rounded-full bg-[#081b12] border border-emerald-500/40 text-[#00ff88] text-[10px] font-mono font-bold flex items-center justify-center">
-                {watchlistCount}
+        {/* PAGE HEADER & QUICK ACTIONS */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="text-xs font-mono font-bold tracking-wider uppercase text-indigo-400">
+                Institutional Portfolio
               </span>
             </div>
-
-            <div className="space-y-2 mt-3">
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-emerald-500/15 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-semibold text-white">L&T Infrastructure</p>
-                  <p className="text-[10px] text-emerald-400/80 font-mono">₹ 14.5 Cr • Exp: 2027-12</p>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-[#00ff88] font-mono">SEALED</span>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-emerald-500/15 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-semibold text-white">Siemens Power Ltd</p>
-                  <p className="text-[10px] text-amber-400/80 font-mono">₹ 8.2 Cr • In Review</p>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">PENDING</span>
-              </div>
-            </div>
-          </div>
-
-          {/* AUDIT / RESEARCH HISTORY */}
-          <div className="cyber-panel p-5 rounded-2xl border border-emerald-500/20">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-base text-[#00ff88]">🕒</span>
-                <h3 className="text-sm font-bold text-white tracking-wide">Audit & Swift Logs</h3>
-              </div>
-              <span className="w-5 h-5 rounded-full bg-[#081b12] border border-emerald-500/40 text-[#00ff88] text-[10px] font-mono font-bold flex items-center justify-center">
-                {historyCount}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              Recent ledger verification: <span className="text-[#00ff88] font-mono">0x4a9...f812</span> confirmed 14 mins ago.
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Bank Guarantee Dashboard
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Real-time monitoring of corporate guarantee requisitions, approvals and risk exposure.
             </p>
           </div>
 
-        </div>
-
-        {/* RIGHT COLUMN: SEARCH & SPECIALIZED 4 AI AGENTS (8 cols on lg) */}
-        <div className="lg:col-span-8 space-y-6">
-
-          {/* GUARANTEE SEARCH & INTELLIGENCE BAR */}
-          <div className="cyber-panel p-5 rounded-2xl border border-emerald-500/20 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-base text-[#00ff88]">🔍</span>
-                <h2 className="text-sm font-bold text-white tracking-wide">
-                  Guarantee Search & Exposure Query
-                </h2>
-              </div>
-
-              {/* Exchange / Guarantee Type Pills */}
-              <div className="flex items-center gap-1.5">
-                {quickFilters.map((pill) => (
-                  <button
-                    key={pill}
-                    onClick={() => setSelectedTag(pill)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition ${
-                      selectedTag === pill
-                        ? "bg-[#00ff88] text-[#05150d] shadow-[0_0_12px_rgba(0,255,136,0.5)]"
-                        : "bg-[#06140d] text-slate-400 hover:text-white border border-emerald-500/20"
-                    }`}
-                  >
-                    {pill}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Input + Solid Green Button Row (Directly matching screenshot) */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by company name or docket ID (e.g. L&T, Siemens, BPCL, WO-2026)..."
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#06140d] border border-emerald-500/30 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-[#00ff88]"
-                />
-                <span className="absolute left-3 top-3 text-slate-400 text-xs">🔍</span>
-              </div>
-
-              <button
-                onClick={() => navigate("/approval")}
-                className="py-2.5 px-5 rounded-xl btn-neon-solid text-xs font-bold flex items-center justify-center gap-2 cursor-pointer flex-shrink-0"
-              >
-                <span>⚡</span>
-                <span>Search & Verify Docket</span>
-              </button>
-            </div>
-
-            {/* Quick Alpha / Company Tags */}
-            <div className="flex items-center flex-wrap gap-2 pt-1 text-[11px]">
-              <span className="text-slate-400 font-mono text-[10px] uppercase">Quick Alpha:</span>
-              {quickCompanies.map((comp) => (
-                <button
-                  key={comp.code}
-                  onClick={() => setSearchQuery(comp.name)}
-                  className="px-2 py-0.5 rounded-md bg-white/[0.03] hover:bg-[#00ff88]/15 text-slate-300 hover:text-[#00ff88] border border-white/5 transition text-[10px] font-mono"
-                >
-                  {comp.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* SPECIALIZED GUARANTEE AI AGENTS HEADER */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2">
-              <span className="text-base text-[#00ff88]">🤖</span>
-              <h2 className="text-sm font-bold text-white tracking-wide">
-                Specialized Guarantee Analysis AI Agents
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate("/bg-request")}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs transition cursor-pointer"
-              >
-                <span>🔄</span>
-                <span>Run Multi-Agent Deep Dive</span>
-              </button>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-semibold bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse"></span>
-                4 Specialized Agents
-              </span>
-            </div>
-          </div>
-
-          {/* 4 SPECIALIZED AI AGENTS (2x2 Grid with 3D Tilt matching screenshot) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            
-            {/* AGENT #1 */}
-            <TiltCard
-              maxTilt={10}
+          <div className="flex items-center gap-3">
+            <button
               onClick={() => navigate("/bg-request")}
-              className="cyber-panel p-5 rounded-2xl border border-emerald-500/25 hover:border-emerald-500/50 flex flex-col justify-between cursor-pointer"
+              className="px-5 py-3 rounded-2xl btn-primary-3d text-sm font-semibold flex items-center gap-2 cursor-pointer shadow-lg"
             >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-sm text-[#00ff88]">
-                    📈
-                  </div>
-                  <span className="badge-agent">AGENT #1</span>
-                </div>
-
-                <h3 className="text-sm font-bold text-white tracking-wide">
-                  Fundamental Analysis Agent
-                </h3>
-                <p className="text-[11px] text-cyan-300 font-mono mt-0.5">
-                  Tender Covenants & Valuation
-                </p>
-
-                <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                  Evaluates balance sheet capacity, cash flow ratios, work order milestones, and contract indemnity limits.
-                </p>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 text-cyan-400 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                  <span>Standby</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[10px]">
-                  Autonomous Agent Ready
-                </span>
-              </div>
-            </TiltCard>
-
-            {/* AGENT #2 */}
-            <TiltCard
-              maxTilt={10}
-              onClick={() => navigate("/reports")}
-              className="cyber-panel p-5 rounded-2xl border border-emerald-500/25 hover:border-emerald-500/50 flex flex-col justify-between cursor-pointer"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-sm text-[#00ff88]">
-                    📉
-                  </div>
-                  <span className="badge-agent">AGENT #2</span>
-                </div>
-
-                <h3 className="text-sm font-bold text-white tracking-wide">
-                  Technical Analysis Agent
-                </h3>
-                <p className="text-[11px] text-cyan-300 font-mono mt-0.5">
-                  Exposure Velocity & Momentum Signals
-                </p>
-
-                <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                  Synthesizes portfolio drawdown trends, maturity clusters, moving concentration averages, and liquidity buffers.
-                </p>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 text-cyan-400 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                  <span>Standby</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[10px]">
-                  Autonomous Agent Ready
-                </span>
-              </div>
-            </TiltCard>
-
-            {/* AGENT #3 */}
-            <TiltCard
-              maxTilt={10}
+              <span>✨</span>
+              <span>New BG Request</span>
+            </button>
+            <button
               onClick={() => navigate("/approval")}
-              className="cyber-panel p-5 rounded-2xl border border-emerald-500/25 hover:border-emerald-500/50 flex flex-col justify-between cursor-pointer"
+              className="px-4 py-3 rounded-2xl btn-outline-3d text-sm font-medium flex items-center gap-2 cursor-pointer"
             >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-sm text-[#00ff88]">
-                    📡
-                  </div>
-                  <span className="badge-agent">AGENT #3</span>
-                </div>
-
-                <h3 className="text-sm font-bold text-white tracking-wide">
-                  News & Sentiment Agent
-                </h3>
-                <p className="text-[11px] text-cyan-300 font-mono mt-0.5">
-                  Beneficiary Disputes & Macro Feeds
-                </p>
-
-                <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                  Aggregates real-time regulatory notices, legal arbitrations, court injunctions, and counterparty credit ratings.
-                </p>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 text-cyan-400 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                  <span>Standby</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[10px]">
-                  Autonomous Agent Ready
-                </span>
-              </div>
-            </TiltCard>
-
-            {/* AGENT #4 */}
-            <TiltCard
-              maxTilt={10}
-              onClick={() => navigate("/approval")}
-              className="cyber-panel p-5 rounded-2xl border border-emerald-500/25 hover:border-emerald-500/50 flex flex-col justify-between cursor-pointer"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-sm text-[#00ff88]">
-                    🛡️
-                  </div>
-                  <span className="badge-agent">AGENT #4</span>
-                </div>
-
-                <h3 className="text-sm font-bold text-white tracking-wide">
-                  Risk Management Agent
-                </h3>
-                <p className="text-[11px] text-cyan-300 font-mono mt-0.5">
-                  Volatility & Claim Drawdown Guard
-                </p>
-
-                <p className="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                  Cross-checks counter-guarantee margin coverage, multi-level sign-offs, and consortium ceiling thresholds.
-                </p>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 text-cyan-400 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                  <span>Standby</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[10px]">
-                  Autonomous Agent Ready
-                </span>
-              </div>
-            </TiltCard>
-
+              <span>📋</span>
+              <span>Review Desk</span>
+            </button>
           </div>
-
         </div>
+
+        {loading ? (
+          <div className="bg-glass-card p-16 rounded-3xl text-center text-slate-400 animate-pulse">
+            <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            Loading portfolio metrics...
+          </div>
+        ) : (
+          <>
+            {/* 5 HERO 3D STAT TILT CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
+              
+              {/* TOTAL REQUESTS */}
+              <TiltCard maxTilt={10} className="bg-glass-card p-6 rounded-3xl border border-indigo-500/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Total Requests
+                  </span>
+                  <span className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center text-lg">
+                    📊
+                  </span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-indigo-300 mt-4 tracking-tight">
+                  {stats.totalRequests}
+                </h2>
+                <p className="text-xs text-slate-400 mt-2">Cumulative applications</p>
+              </TiltCard>
+
+              {/* APPROVED */}
+              <TiltCard maxTilt={10} className="bg-glass-card p-6 rounded-3xl border border-emerald-500/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Approved & Issued
+                  </span>
+                  <span className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-lg">
+                    ✅
+                  </span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-emerald-400 mt-4 tracking-tight">
+                  {stats.approvedRequests}
+                </h2>
+                <p className="text-xs text-emerald-400/80 mt-2">Ready for beneficiary</p>
+              </TiltCard>
+
+              {/* PENDING */}
+              <TiltCard maxTilt={10} className="bg-glass-card p-6 rounded-3xl border border-amber-500/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Pending Review
+                  </span>
+                  <span className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center text-lg">
+                    ⏳
+                  </span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-amber-400 mt-4 tracking-tight">
+                  {stats.pendingRequests}
+                </h2>
+                <p className="text-xs text-amber-300/80 mt-2">Awaiting authorization</p>
+              </TiltCard>
+
+              {/* REJECTED */}
+              <TiltCard maxTilt={10} className="bg-glass-card p-6 rounded-3xl border border-rose-500/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Flagged / Rejected
+                  </span>
+                  <span className="w-9 h-9 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center text-lg">
+                    ❌
+                  </span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-rose-400 mt-4 tracking-tight">
+                  {stats.rejectedRequests}
+                </h2>
+                <p className="text-xs text-rose-300/80 mt-2">Non-compliant terms</p>
+              </TiltCard>
+
+              {/* TOTAL BG AMOUNT */}
+              <TiltCard maxTilt={10} className="bg-glass-card p-6 rounded-3xl border border-cyan-500/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Total BG Amount
+                  </span>
+                  <span className="w-9 h-9 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center text-lg">
+                    💰
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-cyan-300 mt-4 tracking-tight">
+                  ₹ {Number(stats.totalBGAmount || 0).toLocaleString()}
+                </h2>
+                <p className="text-xs text-cyan-400/80 mt-2 font-mono">
+                  {(Number(stats.totalBGAmount || 0) / 10000000).toFixed(2)} Cr exposure
+                </p>
+              </TiltCard>
+            </div>
+
+            {/* BG LIFECYCLE WORKFLOW PIPELINE */}
+            <div className="bg-glass-card p-6 sm:p-7 rounded-3xl border border-white/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-white">Bank Guarantee Issuance Lifecycle</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Automated compliance tracking across departmental divisions</p>
+                </div>
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  4 Workflow Stages
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 relative">
+                  <span className="w-7 h-7 rounded-lg bg-indigo-600/30 text-indigo-300 font-bold text-xs flex items-center justify-center mb-2">
+                    01
+                  </span>
+                  <h4 className="text-sm font-semibold text-white">Requisition Lodged</h4>
+                  <p className="text-xs text-slate-400 mt-1">Department submits tender work order and contract draft</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 relative">
+                  <span className="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-300 font-bold text-xs flex items-center justify-center mb-2">
+                    02
+                  </span>
+                  <h4 className="text-sm font-semibold text-white">Covenant Verification</h4>
+                  <p className="text-xs text-slate-400 mt-1">Legal checks beneficiary clause, claim period and indemnity</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 relative">
+                  <span className="w-7 h-7 rounded-lg bg-amber-600/30 text-amber-300 font-bold text-xs flex items-center justify-center mb-2">
+                    03
+                  </span>
+                  <h4 className="text-sm font-semibold text-white">Administrative Sign-Off</h4>
+                  <p className="text-xs text-slate-400 mt-1">Authorized officer executes approval or records audit notes</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 relative">
+                  <span className="w-7 h-7 rounded-lg bg-emerald-600/30 text-emerald-300 font-bold text-xs flex items-center justify-center mb-2">
+                    04
+                  </span>
+                  <h4 className="text-sm font-semibold text-white">Issuance & Ledger Seal</h4>
+                  <p className="text-xs text-slate-400 mt-1">Bank certificate issued and archived into audit report ledger</p>
+                </div>
+              </div>
+            </div>
+
+            {/* SUMMARY & VELOCITY ANALYTICS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* APPROVAL RATE */}
+              <div className="bg-glass-card p-6 sm:p-7 rounded-3xl border border-white/10 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Portfolio Approval Rate</h3>
+                    <span className="text-xs font-bold text-emerald-400 font-mono">{approvalRate}%</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Ratio of successfully authorized guarantees versus total applications
+                  </p>
+
+                  <div className="w-full h-3 rounded-full bg-slate-900 overflow-hidden mt-5 border border-white/5 p-0.5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 shadow-[0_0_12px_rgba(99,102,241,0.5)] transition-all duration-1000"
+                      style={{ width: `${approvalRate}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+                  <span>Approved: {stats.approvedRequests}</span>
+                  <span>Rejected: {stats.rejectedRequests}</span>
+                  <span>Total Volume: {stats.totalRequests}</span>
+                </div>
+              </div>
+
+              {/* PENDING WORKLOAD DESK */}
+              <div className="bg-glass-card p-6 sm:p-7 rounded-3xl border border-white/10 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">Pending Approval Workload</h3>
+                    <span className="text-xs font-bold text-amber-400 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
+                      Action Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Dockets currently waiting for authorized clearance on the risk desk
+                  </p>
+
+                  <div className="mt-5 flex items-baseline gap-3">
+                    <span className="text-4xl sm:text-5xl font-black text-amber-400">
+                      {stats.pendingRequests}
+                    </span>
+                    <span className="text-sm text-slate-300 font-medium">dockets in review queue</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Zero SLA breach</span>
+                  <button
+                    onClick={() => navigate("/approval")}
+                    className="text-xs font-semibold text-indigo-300 hover:text-white flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Open Approval Desk</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
       </div>
     </MainLayout>
