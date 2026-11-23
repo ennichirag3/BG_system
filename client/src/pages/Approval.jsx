@@ -1,331 +1,319 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import MainLayout from "../layouts/MainLayout";
 import API from "../services/api";
 
-const SAMPLE_FALLBACK_REQUESTS = [
-  {
-    _id: "bg-889101",
-    department: "Finance & Accounts",
-    requesterName: "Siddharth Rao",
-    bgAmount: 12500000,
-    status: "Approved",
-    remarks: "Covenants verified under master facility.",
-    partyName: "Bharat Petroleum Corp Ltd",
-    typeOfWork: "Turnkey Refinery Automation",
-    workOrderNo: "WO-2026-ENG-847",
-    jobValue: 85000000,
-    bgExpiryDate: "2027-12-31",
-    claimPeriod: "6 Months",
-    location: "Mumbai Port Complex",
-  },
-  {
-    _id: "bg-889102",
-    department: "Procurement & Contracts",
-    requesterName: "Ananya Deshmukh",
-    bgAmount: 4500000,
-    status: "Approved",
-    remarks: "Cleared by Risk Committee.",
-    partyName: "Tata Steel Projects",
-    typeOfWork: "Structural Heavy Fabrication",
-    workOrderNo: "WO-2026-TS-019",
-    jobValue: 24000000,
-    bgExpiryDate: "2027-06-30",
-    claimPeriod: "3 Months",
-    location: "Jamshedpur Hub",
-  },
-  {
-    _id: "bg-889103",
-    department: "Operations & Projects",
-    requesterName: "Kunal Mehra",
-    bgAmount: 18000000,
-    status: "Pending",
-    remarks: "Requires board sign-off.",
-    partyName: "National Highways Authority",
-    typeOfWork: "Expressway Segment 4",
-    workOrderNo: "NHAI-PKG-77",
-    jobValue: 120000000,
-    bgExpiryDate: "2028-03-31",
-    claimPeriod: "1 Year",
-    location: "Delhi-NCR Corridor",
-  },
-  {
-    _id: "bg-889104",
-    department: "Legal & Compliance",
-    requesterName: "Meera Nair",
-    bgAmount: 2200000,
-    status: "Rejected",
-    remarks: "Clause 14 indemnity missing.",
-    partyName: "Global Metro Rail Cons.",
-    typeOfWork: "Signaling & Telemetry",
-    workOrderNo: "GMRC-SIG-202",
-    jobValue: 14000000,
-    bgExpiryDate: "2026-11-30",
-    claimPeriod: "1 Month",
-    location: "Kochi Metro",
-  },
+const BASE_URL = (() => {
+  if (typeof window !== "undefined") {
+    const h = window.location.hostname;
+    if (h === "localhost" || h === "127.0.0.1") return "http://localhost:8000";
+  }
+  return "https://bg-system-3.onrender.com";
+})();
+
+const COLS = [
+  { key: "index",        label: "#",                   w: "w-10" },
+  { key: "_id",          label: "Docket ID",           w: "w-28" },
+  { key: "dateOfRequest",label: "Date",                w: "w-24" },
+  { key: "department",   label: "Department",          w: "w-32" },
+  { key: "location",     label: "Location",            w: "w-28" },
+  { key: "workOrderNo",  label: "Work Order No.",      w: "w-28" },
+  { key: "typeOfWork",   label: "Type of Work",        w: "w-36" },
+  { key: "jobValue",     label: "Job Value (₹)",       w: "w-28" },
+  { key: "requesterName",label: "First Owner",         w: "w-28" },
+  { key: "superiorName", label: "Alternate Owner",     w: "w-28" },
+  { key: "partyName",    label: "Party Name",          w: "w-32" },
+  { key: "natureOfBG",   label: "Nature of BG",        w: "w-28" },
+  { key: "bgAmount",     label: "BG Amount (₹)",       w: "w-28" },
+  { key: "bgExpiryDate", label: "Expiry Date",         w: "w-24" },
+  { key: "claimPeriod",  label: "Claim Period",        w: "w-24" },
+  { key: "status",       label: "Status",              w: "w-24" },
 ];
 
-function Approval() {
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [remarksMap, setRemarksMap] = useState({});
-  const [filter, setFilter] = useState("All");
+const STATUS_COLORS = {
+  Pending:  "bg-amber-500/20 text-amber-300 border-amber-500/40",
+  Approved: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+  Rejected: "bg-rose-500/20 text-rose-300 border-rose-500/40",
+  Returned: "bg-blue-500/20 text-blue-300 border-blue-500/40",
+};
 
-  const fetchRequests = async () => {
+const FILTER_TABS = ["All", "Pending", "Approved", "Rejected", "Returned"];
+
+function DocLink({ filename, label }) {
+  if (!filename) return <span className="text-slate-600 text-xs italic">Not uploaded</span>;
+  const url = `${BASE_URL}/uploads/${filename}`;
+  return (
+    <a href={url} target="_blank" rel="noreferrer"
+      className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-200 underline underline-offset-2">
+      <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5" stroke="currentColor" strokeWidth="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+      </svg>
+      {label}
+    </a>
+  );
+}
+
+function Approval() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const isAdmin = ["BG Administrator","Admin","admin","Lead Admin"].includes(user.role);
+
+  const [requests, setRequests]       = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [filter, setFilter]           = useState("All");
+  const [expanded, setExpanded]       = useState(null);
+  const [adminRemarks, setAdminRemarks] = useState({});
+  const [actionMsg, setActionMsg]     = useState({ id: null, msg: "", ok: true });
+  const msgTimer = useRef(null);
+
+  const fetch = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await API.get("/bg");
-      const data = response?.data?.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        setRequests(data);
-      } else {
-        setRequests(SAMPLE_FALLBACK_REQUESTS);
-      }
-    } catch (error) {
-      console.log("Using sample data for offline mode:", error);
-      setRequests(SAMPLE_FALLBACK_REQUESTS);
-    } finally {
-      setLoading(false);
-    }
+      const res = await API.get("/bg");
+      setRequests(res.data?.data || []);
+    } catch { setRequests([]); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
+  useEffect(() => { fetch(); }, []);
+
+  const showMsg = (id, msg, ok = true) => {
+    clearTimeout(msgTimer.current);
+    setActionMsg({ id, msg, ok });
+    msgTimer.current = setTimeout(() => setActionMsg({ id: null, msg: "", ok: true }), 3000);
+  };
 
   const updateStatus = async (id, status) => {
+    if (!isAdmin) return showMsg(id, "Permission Denied: Only Admin can approve or reject.", false);
     try {
-      await API.put(`/bg/${id}/status`, {
-        status,
-        remarks: remarksMap[id] || "",
-      });
-      setRequests((prev) =>
-        prev.map((r) =>
-          r._id === id || r.id === id ? { ...r, status, remarks: remarksMap[id] || r.remarks } : r
-        )
-      );
-    } catch (error) {
-      setRequests((prev) =>
-        prev.map((r) =>
-          r._id === id || r.id === id ? { ...r, status, remarks: remarksMap[id] || r.remarks } : r
-        )
-      );
+      await API.put(`/bg/${id}/status`, { status, adminRemarks: adminRemarks[id] || "", userRole: user.role },
+        { headers: { "x-user-role": user.role } });
+      setRequests(prev => prev.map(r => (r._id === id || r.id === id) ? { ...r, status, adminRemarks: adminRemarks[id] || r.adminRemarks } : r));
+      showMsg(id, `Marked as ${status}`, true);
+    } catch (err) {
+      showMsg(id, err.response?.data?.message || "Action failed", false);
     }
   };
 
-  const handleRemarkChange = (id, value) => {
-    setRemarksMap((prev) => ({
-      ...prev,
-      [id]: value,
-    }));
-  };
-
-  const filteredRequests = requests.filter((item) => {
-    if (filter === "All") return true;
-    return item.status?.toLowerCase() === filter.toLowerCase();
-  });
+  const filtered = requests.filter(r => filter === "All" || r.status === filter);
 
   return (
     <MainLayout>
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="max-w-full space-y-5">
         {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
-              <span className="text-xs font-mono font-bold tracking-wider uppercase text-indigo-400">
-                Risk & Verification Desk
-              </span>
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+              <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-indigo-400">Risk & Verification Desk</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Bank Guarantee Approval Management
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Review docket particulars, verify indemnity covenants, and execute administrative sign-offs.
+            <h1 className="text-2xl font-black text-white tracking-tight">BG Approval Management</h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              All 15 BG docket columns displayed. {isAdmin ? "Admin sign-off active." : "Read-only view — approval restricted to Admin."}
             </p>
           </div>
-
-          {/* FILTER TABS */}
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#0e1326] border border-white/10">
-            {["All", "Pending", "Approved", "Rejected"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setFilter(tab)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                  filter === tab
-                    ? "bg-indigo-600 text-white shadow-md font-bold"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {tab}
+          <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-[#0d1222] border border-white/10">
+            {FILTER_TABS.map(t => (
+              <button key={t} onClick={() => setFilter(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${filter === t ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white hover:bg-white/5"}`}>
+                {t}
               </button>
             ))}
           </div>
         </div>
 
-        {/* METRICS ROW */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-glass-card p-4 rounded-2xl border border-white/10">
-            <span className="text-xs text-slate-400 uppercase tracking-wider">Total Dockets</span>
-            <p className="text-2xl font-bold text-white mt-1">{requests.length}</p>
+        {/* ROLE BANNER */}
+        {!isAdmin ? (
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-3 text-xs text-amber-200">
+            <span className="text-amber-300 text-base">🔒</span>
+            <span>
+              You are signed in as <strong className="text-white">{user.fullName}</strong> ({user.role}).
+              Approve / Reject actions are restricted to <strong className="text-amber-300">BG Administrator</strong> only.
+            </span>
           </div>
-          <div className="bg-glass-card p-4 rounded-2xl border border-amber-500/25">
-            <span className="text-xs text-amber-400 uppercase tracking-wider">Pending Review</span>
-            <p className="text-2xl font-bold text-amber-300 mt-1">
-              {requests.filter((r) => r.status === "Pending").length}
-            </p>
+        ) : (
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-xs text-emerald-300">
+            <span>✓</span>
+            <span>Admin session active — <strong>{user.fullName}</strong>. You have authorization to approve, reject or return dockets.</span>
           </div>
-          <div className="bg-glass-card p-4 rounded-2xl border border-emerald-500/25">
-            <span className="text-xs text-emerald-400 uppercase tracking-wider">Authorized</span>
-            <p className="text-2xl font-bold text-emerald-400 mt-1">
-              {requests.filter((r) => r.status === "Approved").length}
-            </p>
-          </div>
-          <div className="bg-glass-card p-4 rounded-2xl border border-rose-500/25">
-            <span className="text-xs text-rose-400 uppercase tracking-wider">Declined</span>
-            <p className="text-2xl font-bold text-rose-400 mt-1">
-              {requests.filter((r) => r.status === "Rejected").length}
-            </p>
-          </div>
-        </div>
+        )}
 
-        {/* DOCKET TABLE */}
-        <div className="bg-glass-card-glow rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
-          {loading ? (
-            <div className="p-16 text-center text-slate-400">
-              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              Loading approval queue...
-            </div>
-          ) : filteredRequests.length === 0 ? (
-            <div className="p-16 text-center text-slate-400">
-              <p className="text-2xl mb-1">✨</p>
-              <p className="text-sm font-semibold text-white">No dockets in this category</p>
-              <p className="text-xs text-slate-400 mt-0.5">All requests have been evaluated.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.03] text-slate-400 uppercase font-semibold">
-                    <th className="py-4 px-6">Reference ID</th>
-                    <th className="py-4 px-6">Beneficiary / Party</th>
-                    <th className="py-4 px-6">Department</th>
-                    <th className="py-4 px-6">Work Order</th>
-                    <th className="py-4 px-6">BG Amount</th>
-                    <th className="py-4 px-6">Status</th>
-                    <th className="py-4 px-6 text-right">Action Decision</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredRequests.map((item) => {
-                    const isExpanded = expandedRow === item._id;
-                    const statusColors = {
-                      Approved: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-                      Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-                      Rejected: "bg-rose-500/15 text-rose-400 border-rose-500/30",
-                    };
+        {/* TABLE */}
+        {loading ? (
+          <div className="text-center py-16 text-slate-400 text-sm">Loading BG requests…</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 text-slate-500 text-sm">No records for "{filter}" filter.</div>
+        ) : (
+          <div className="bg-glass-card rounded-2xl border border-white/10 overflow-x-auto">
+            <table className="w-full text-xs min-w-[1200px]">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.03] text-left">
+                  {COLS.map(c => (
+                    <th key={c.key} className={`py-3 px-3 text-[10px] font-mono font-bold uppercase text-slate-400 ${c.w}`}>
+                      {c.label}
+                    </th>
+                  ))}
+                  <th className="py-3 px-3 text-[10px] font-mono font-bold uppercase text-slate-400 w-28">Remarks</th>
+                  <th className="py-3 px-3 text-[10px] font-mono font-bold uppercase text-slate-400 w-48 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => {
+                  const isOpen = expanded === item._id;
+                  return (
+                    <React.Fragment key={item._id}>
+                      <tr
+                        onClick={() => setExpanded(isOpen ? null : item._id)}
+                        className="border-b border-white/5 hover:bg-white/[0.03] transition cursor-pointer group"
+                      >
+                        <td className="py-3 px-3 text-slate-500 font-mono">{idx + 1}</td>
+                        <td className="py-3 px-3 font-mono text-indigo-300">
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-slate-600 group-hover:text-slate-400 transition">{isOpen ? "▼" : "▶"}</span>
+                            {String(item._id || "").slice(-8).toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-300 font-mono whitespace-nowrap">{item.dateOfRequest || "—"}</td>
+                        <td className="py-3 px-3 text-slate-300">{item.department || "—"}</td>
+                        <td className="py-3 px-3 text-slate-400">{item.location || "—"}</td>
+                        <td className="py-3 px-3 text-slate-400 font-mono">{item.workOrderNo || "—"}</td>
+                        <td className="py-3 px-3 text-slate-300">{item.typeOfWork || "—"}</td>
+                        <td className="py-3 px-3 text-slate-300 font-mono text-right whitespace-nowrap">₹ {Number(item.jobValue||0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-white font-semibold">{item.requesterName || "—"}</td>
+                        <td className="py-3 px-3 text-slate-400">{item.superiorName || "—"}</td>
+                        <td className="py-3 px-3 text-slate-300">{item.partyName || "—"}</td>
+                        <td className="py-3 px-3 text-slate-400">{item.natureOfBG || "—"}</td>
+                        <td className="py-3 px-3 font-mono font-bold text-cyan-300 whitespace-nowrap text-right">₹ {Number(item.bgAmount||0).toLocaleString()}</td>
+                        <td className="py-3 px-3 text-amber-300 font-mono whitespace-nowrap">{item.bgExpiryDate || "—"}</td>
+                        <td className="py-3 px-3 text-slate-400">{item.claimPeriod || "—"}</td>
+                        <td className="py-3 px-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${STATUS_COLORS[item.status] || "bg-slate-800 text-slate-300"}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />{item.status || "Pending"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-400 max-w-[120px] truncate">
+                          {item.adminRemarks || item.remarks || "—"}
+                        </td>
+                        <td className="py-3 px-3 text-right" onClick={e => e.stopPropagation()}>
+                          {isAdmin ? (
+                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                              <button onClick={() => updateStatus(item._id, "Approved")}
+                                className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[10px] font-semibold transition cursor-pointer whitespace-nowrap">
+                                ✓ Approve
+                              </button>
+                              <button onClick={() => updateStatus(item._id, "Rejected")}
+                                className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 text-[10px] font-semibold transition cursor-pointer whitespace-nowrap">
+                                ✕ Reject
+                              </button>
+                              <button onClick={() => updateStatus(item._id, "Returned")}
+                                className="px-2 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/35 border border-blue-500/40 text-blue-300 text-[10px] font-semibold transition cursor-pointer whitespace-nowrap">
+                                ↩ Return
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-600 italic">Admin only</span>
+                          )}
+                        </td>
+                      </tr>
 
-                    return (
-                      <React.Fragment key={item._id}>
-                        <tr
-                          onClick={() => setExpandedRow(isExpanded ? null : item._id)}
-                          className="hover:bg-white/[0.04] transition-colors cursor-pointer group"
-                        >
-                          <td className="py-4 px-6 font-mono text-indigo-300">
-                            <span className="flex items-center gap-2">
-                              <span className="text-slate-500 group-hover:text-white transition">
-                                {isExpanded ? "▼" : "▶"}
-                              </span>
-                              {item._id.slice(-8).toUpperCase()}
-                            </span>
+                      {/* ACTION MESSAGE inline */}
+                      {actionMsg.id === item._id && (
+                        <tr>
+                          <td colSpan={18} className={`px-4 py-1.5 text-xs font-semibold ${actionMsg.ok ? "text-emerald-400" : "text-rose-400"}`}>
+                            {actionMsg.ok ? "✓" : "⚠"} {actionMsg.msg}
                           </td>
-                          <td className="py-4 px-6">
-                            <p className="font-semibold text-white">{item.partyName || "Contractor Org"}</p>
-                            <p className="text-[10px] text-slate-400">{item.requesterName || "Internal Requester"}</p>
-                          </td>
-                          <td className="py-4 px-6 text-slate-300">{item.department}</td>
-                          <td className="py-4 px-6 font-mono text-slate-400">{item.workOrderNo || item.workOrder || "N/A"}</td>
-                          <td className="py-4 px-6 font-bold text-white font-mono">
-                            ₹ {Number(item.bgAmount || 0).toLocaleString()}
-                          </td>
-                          <td className="py-4 px-6">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${
-                                statusColors[item.status] || "bg-slate-800 text-slate-300"
-                              }`}
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => updateStatus(item._id, "Approved")}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-semibold transition active:scale-95 cursor-pointer"
-                              >
-                                Approve ✓
-                              </button>
-                              <button
-                                onClick={() => updateStatus(item._id, "Rejected")}
-                                className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-semibold transition active:scale-95 cursor-pointer"
-                              >
-                                Reject ✕
-                              </button>
+                        </tr>
+                      )}
+
+                      {/* EXPANDED ROW: full details + documents */}
+                      {isOpen && (
+                        <tr className="bg-white/[0.015]">
+                          <td colSpan={18} className="p-5 border-t border-white/5">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
+
+                              {/* Contract Particulars */}
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-wider mb-2">Contract Particulars</p>
+                                {[
+                                  ["Department",    item.department],
+                                  ["Location",      item.location],
+                                  ["Work Order",    item.workOrderNo],
+                                  ["Type of Work",  item.typeOfWork],
+                                  ["Job Value",     `₹ ${Number(item.jobValue||0).toLocaleString()}`],
+                                  ["Requester",     item.requesterName],
+                                  ["Superior",      item.superiorName],
+                                  ["Submitted By",  item.submittedBy + (item.submittedByRole ? ` (${item.submittedByRole})` : "")],
+                                ].map(([k,v]) => (
+                                  <div key={k} className="flex gap-2">
+                                    <span className="text-slate-500 w-24 flex-shrink-0">{k}:</span>
+                                    <span className="text-white">{v || "—"}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* BG Terms */}
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-wider mb-2">BG Terms</p>
+                                {[
+                                  ["Party",        item.partyName],
+                                  ["Nature of BG", item.natureOfBG],
+                                  ["BG Amount",    `₹ ${Number(item.bgAmount||0).toLocaleString()}`],
+                                  ["Expiry Date",  item.bgExpiryDate],
+                                  ["Claim Period", item.claimPeriod],
+                                  ["Remarks",      item.remarks || "—"],
+                                ].map(([k,v]) => (
+                                  <div key={k} className="flex gap-2">
+                                    <span className="text-slate-500 w-24 flex-shrink-0">{k}:</span>
+                                    <span className="text-white">{v || "—"}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Documents + Admin Remarks */}
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider">Attachments</p>
+                                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
+                                  <DocLink filename={item.bgDraft}           label="I. BG Vetted Draft" />
+                                  <DocLink filename={item.mdApproval}        label="II. MD Approval" />
+                                  <DocLink filename={item.boardApproval}     label="III. Board Approval" />
+                                  <DocLink filename={item.beneficiaryClause} label="IV. Beneficiary Clause" />
+                                  <DocLink filename={item.bankDetails}       label="V. Bank Account Details" />
+                                </div>
+
+                                {isAdmin && (
+                                  <div className="space-y-1.5">
+                                    <p className="text-[10px] font-mono font-bold text-emerald-400 uppercase">Admin Remarks</p>
+                                    <textarea
+                                      rows={2}
+                                      placeholder="Enter admin remarks / audit notes…"
+                                      value={adminRemarks[item._id] ?? item.adminRemarks ?? ""}
+                                      onChange={e => setAdminRemarks(p => ({ ...p, [item._id]: e.target.value }))}
+                                      onClick={e => e.stopPropagation()}
+                                      className="w-full px-3 py-2 rounded-xl bg-[#060814] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500 resize-none"
+                                    />
+                                    <p className="text-[10px] text-slate-500">These remarks are recorded permanently into the audit trail.</p>
+                                  </div>
+                                )}
+                                {!isAdmin && item.adminRemarks && (
+                                  <div>
+                                    <p className="text-[10px] font-mono font-bold text-emerald-400 uppercase mb-1">Admin Remarks</p>
+                                    <p className="text-xs text-slate-300 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">{item.adminRemarks}</p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                        {isExpanded && (
-                          <tr className="bg-white/[0.02]">
-                            <td colSpan="7" className="p-6 border-y border-white/5">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
-                                <div className="space-y-1.5">
-                                  <span className="text-slate-400 uppercase font-semibold">Contract Particulars</span>
-                                  <div className="p-3.5 rounded-2xl bg-white/[0.03] space-y-1.5 border border-white/5">
-                                    <p><span className="text-slate-400">Nature of Work:</span> <span className="text-white">{item.typeOfWork || "General EPC"}</span></p>
-                                    <p><span className="text-slate-400">Total Job Value:</span> <span className="text-white font-mono">₹ {Number(item.jobValue || 0).toLocaleString()}</span></p>
-                                    <p><span className="text-slate-400">Operating Site:</span> <span className="text-white">{item.location || "Central HQ"}</span></p>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  <span className="text-slate-400 uppercase font-semibold">Validity & Tenor</span>
-                                  <div className="p-3.5 rounded-2xl bg-white/[0.03] space-y-1.5 border border-white/5">
-                                    <p><span className="text-slate-400">Expiry Date:</span> <span className="text-amber-300 font-mono">{item.bgExpiryDate || item.expiryDate || "Open Ended"}</span></p>
-                                    <p><span className="text-slate-400">Claim Period:</span> <span className="text-white">{item.claimPeriod || "90 Days"}</span></p>
-                                    <p><span className="text-slate-400">Nature of BG:</span> <span className="text-white">{item.natureOfBG || "Performance BG"}</span></p>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  <span className="text-slate-400 uppercase font-semibold">Audit Remarks</span>
-                                  <div className="p-3.5 rounded-2xl bg-white/[0.03] space-y-2 border border-white/5">
-                                    <input
-                                      type="text"
-                                      placeholder="Add audit/approval notes..."
-                                      value={remarksMap[item._id] ?? item.remarks ?? ""}
-                                      onChange={(e) => handleRemarkChange(item._id, e.target.value)}
-                                      className="w-full px-3 py-2 rounded-xl bg-[#080b18] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
-                                    />
-                                    <p className="text-[10px] text-slate-400">
-                                      Notes will be permanently recorded into the audit trail.
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <p className="text-[10px] text-slate-600 font-mono text-right">
+          {filtered.length} record(s) shown
+        </p>
       </div>
     </MainLayout>
   );

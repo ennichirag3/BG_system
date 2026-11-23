@@ -1,397 +1,266 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import API from "../services/api";
 
-function BGRequest() {
-  const [bgAmount, setBgAmount] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [successNotice, setSuccessNotice] = useState(false);
+const NATURE_OPTIONS = [
+  "Performance BG","Advance Payment BG","Earnest Money Deposit (EMD)",
+  "Financial Guarantee","Bid Bond Guarantee","Deferred Payment Guarantee",
+  "Security Deposit BG","Warranty BG","Customs & Shipping Guarantee","Other"
+];
 
-  const [formData, setFormData] = useState({
-    department: "",
+const DEPARTMENTS = [
+  "Finance & Accounts","Procurement & Contracts","Operations & Projects",
+  "Legal & Compliance","Engineering","Human Resources","Administration","Other"
+];
+
+const Field = ({ label, hint, required, children }) => (
+  <div>
+    <label className="text-xs font-semibold text-slate-300 block mb-1">
+      {label} {required && <span className="text-rose-400">*</span>}
+      {hint && <span className="text-slate-500 font-normal ml-1">{hint}</span>}
+    </label>
+    {children}
+  </div>
+);
+
+const inputCls = "w-full px-3.5 py-2.5 rounded-xl bg-[#060814] border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition";
+const selectCls = inputCls + " cursor-pointer";
+
+function BGRequest() {
+  const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  const [form, setForm] = useState({
+    department: user.department || "",
     location: "",
-    requestDate: new Date().toISOString().split("T")[0],
-    workOrder: "",
+    dateOfRequest: new Date().toISOString().split("T")[0],
+    workOrderNo: "",
     typeOfWork: "",
     jobValue: "",
-    requester: "",
-    superior: "",
+    requesterName: user.fullName || "",
+    superiorName: "",
     partyName: "",
-    nature: "",
-    expiryDate: "",
+    natureOfBG: "Performance BG",
+    bgAmount: "",
+    bgExpiryDate: "",
     claimPeriod: "",
     remarks: "",
+  });
+
+  const [files, setFiles] = useState({
     bgDraft: null,
-    approvalFile: null,
+    mdApproval: null,
+    boardApproval: null,
     beneficiaryClause: null,
     bankDetails: null,
   });
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+  const [success, setSuccess] = useState("");
 
-  const handleFileChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.files[0],
-    });
-  };
+  const bgAmt = Number(form.bgAmount) || 0;
+  const needsMD    = bgAmt > 0 && bgAmt <= 1500000;
+  const needsBoard = bgAmt > 1500000;
 
-  const handleAutoFill = () => {
-    setBgAmount("15000000");
-    setFormData({
-      department: "Procurement & Contracts",
-      location: "Navi Mumbai Tech Park",
-      requestDate: new Date().toISOString().split("T")[0],
-      workOrder: "WO-2026-EPC-994",
-      typeOfWork: "HV Substation Turnkey Infrastructure",
-      jobValue: "120000000",
-      requester: "Rahul Varma (Sr. Project Manager)",
-      superior: "Deepak Khurana (VP Infrastructure)",
-      partyName: "State Electricity Transmission Corp",
-      nature: "Performance Bank Guarantee",
-      expiryDate: "2028-03-31",
-      claimPeriod: "180 Days",
-      remarks: "Pre-approved under master facility limits with HDFC & SBI consortium.",
-      bgDraft: null,
-      approvalFile: null,
-      beneficiaryClause: null,
-      bankDetails: null,
-    });
-  };
+  const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleFile   = e => setFiles(p => ({ ...p, [e.target.name]: e.target.files[0] || null }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const amount = Number(bgAmount);
+    setError(""); setSuccess("");
 
-    if (
-      !formData.department ||
-      !formData.location ||
-      !formData.workOrder ||
-      !formData.typeOfWork ||
-      !formData.partyName ||
-      !amount
-    ) {
-      alert("Please fill all mandatory BG fields.");
-      return;
+    const req = ["department","location","dateOfRequest","requesterName","partyName","natureOfBG","bgAmount","bgExpiryDate","claimPeriod"];
+    for (const f of req) {
+      if (!form[f]) return setError(`"${f}" is required`);
     }
+    if (!files.bgDraft) return setError("BG Vetted Draft (Word format) is mandatory");
+    if (needsMD && !files.mdApproval) return setError("MD Approval document is required for BG ≤ ₹15 Lakhs");
+    if (needsBoard && !files.boardApproval) return setError("Board Approval document is required for BG > ₹15 Lakhs");
 
-    setSubmitting(true);
-
+    setLoading(true);
     try {
-      const data = new FormData();
-      data.append("department", formData.department);
-      data.append("location", formData.location);
-      data.append("dateOfRequest", formData.requestDate);
-      data.append("workOrderNo", formData.workOrder);
-      data.append("typeOfWork", formData.typeOfWork);
-      data.append("jobValue", formData.jobValue || 0);
-      data.append("requesterName", formData.requester || "Internal Officer");
-      data.append("superiorName", formData.superior || "Lead Controller");
-      data.append("partyName", formData.partyName);
-      data.append("natureOfBG", formData.nature || "Performance BG");
-      data.append("bgAmount", amount);
-      data.append("bgExpiryDate", formData.expiryDate);
-      data.append("claimPeriod", formData.claimPeriod);
-      data.append("remarks", formData.remarks);
+      const fd = new FormData();
+      Object.entries(form).forEach(([k,v]) => fd.append(k, v));
+      fd.append("submittedBy",   user.fullName || "");
+      fd.append("submittedByRole", user.role   || "Requester");
+      Object.entries(files).forEach(([k,v]) => { if (v) fd.append(k, v); });
 
-      if (formData.bgDraft) data.append("bgDraft", formData.bgDraft);
-      if (formData.approvalFile) data.append("approvalFile", formData.approvalFile);
-      if (formData.beneficiaryClause) data.append("beneficiaryClause", formData.beneficiaryClause);
-      if (formData.bankDetails) data.append("bankDetails", formData.bankDetails);
-
-      await API.post("/bg/create", data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setSuccessNotice(true);
+      await API.post("/bg/create", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setSuccess("BG Request submitted successfully! Redirecting to dashboard…");
+      setTimeout(() => navigate("/dashboard"), 1800);
     } catch (err) {
-      setSuccessNotice(true);
+      setError(err.response?.data?.message || "Submission failed. Please try again.");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
+  const FileInput = ({ name, label, hint, required }) => (
+    <div>
+      <label className="text-xs font-semibold text-slate-300 block mb-1">
+        {label} {required && <span className="text-rose-400">*</span>}
+        {hint && <span className="text-slate-500 font-normal ml-1">({hint})</span>}
+      </label>
+      <label className={`flex items-center gap-3 cursor-pointer px-3.5 py-2.5 rounded-xl border transition ${
+        files[name] ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-300" : "border-dashed border-slate-700 bg-white/[0.02] text-slate-400 hover:border-indigo-500/40 hover:text-slate-200"
+      }`}>
+        <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 flex-shrink-0" stroke="currentColor" strokeWidth="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
+        </svg>
+        <span className="text-xs truncate">{files[name] ? files[name].name : "Click to upload file (PDF, DOC, DOCX)"}</span>
+        <input type="file" name={name} onChange={handleFile} accept=".pdf,.doc,.docx,.png,.jpg" className="hidden" />
+      </label>
+    </div>
+  );
+
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6 pb-8">
         {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span className="text-xs uppercase font-mono font-bold tracking-wider text-cyan-400">
-                Guarantee Requisition
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Initiate Bank Guarantee Application
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Lodge corporate guarantee requisitions with automated covenant verification.
-            </p>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-cyan-400">New Requisition</span>
           </div>
-
-          <button
-            type="button"
-            onClick={handleAutoFill}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl btn-outline-3d text-xs font-semibold cursor-pointer"
-          >
-            <span>⚡</span>
-            <span>Autofill Sample Contract</span>
-          </button>
+          <h1 className="text-2xl font-black text-white tracking-tight">BG Request Form</h1>
+          <p className="text-sm text-slate-400 mt-0.5">From Requester / BG Owner — Complete all mandatory fields and attach required documents.</p>
         </div>
 
-        {successNotice && (
-          <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">✓</span>
-              <div>
-                <p className="font-bold text-white">BG Application Successfully Lodged!</p>
-                <p className="text-[11px] text-emerald-300">Reference docket queued for risk approval and bank transmission.</p>
-              </div>
+        {error   && <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-sm flex items-start gap-2"><span className="mt-0.5">⚠</span><span>{error}</span></div>}
+        {success && <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm flex items-start gap-2"><span>✓</span><span>{success}</span></div>}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+
+          {/* SECTION 1: Request Details */}
+          <div className="bg-glass-card rounded-2xl p-5 border border-white/10 space-y-4">
+            <h2 className="text-xs font-mono font-bold uppercase text-indigo-400 tracking-wider border-b border-white/5 pb-2">
+              Section 1 — Request Details
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Department" required>
+                <select name="department" value={form.department} onChange={handleChange} className={selectCls}>
+                  <option value="">Select department…</option>
+                  {DEPARTMENTS.map(d => <option key={d} value={d} className="bg-[#060814]">{d}</option>)}
+                </select>
+              </Field>
+              <Field label="Location / Site" required>
+                <input name="location" value={form.location} onChange={handleChange} placeholder="Project site or office location" className={inputCls} />
+              </Field>
+              <Field label="Date of Request" required>
+                <input type="date" name="dateOfRequest" value={form.dateOfRequest} onChange={handleChange} className={inputCls} />
+              </Field>
+              <Field label="Work Order No.">
+                <input name="workOrderNo" value={form.workOrderNo} onChange={handleChange} placeholder="e.g. WO-2026-ENG-001" className={inputCls} />
+              </Field>
+              <Field label="Type of Work / Nature of Contract" hint="full column span">
+                <input name="typeOfWork" value={form.typeOfWork} onChange={handleChange} placeholder="e.g. Turnkey EPC, Civil Construction, Supply Contract" className={inputCls} />
+              </Field>
+              <Field label="Job Value (₹)" required>
+                <input type="number" name="jobValue" value={form.jobValue} onChange={handleChange} placeholder="Total contract value in ₹" className={inputCls} />
+              </Field>
             </div>
-            <button
-              onClick={() => setSuccessNotice(false)}
-              className="text-xs text-emerald-300 font-bold underline cursor-pointer hover:text-white"
-            >
-              Dismiss
+          </div>
+
+          {/* SECTION 2: Owner / Hierarchy */}
+          <div className="bg-glass-card rounded-2xl p-5 border border-white/10 space-y-4">
+            <h2 className="text-xs font-mono font-bold uppercase text-indigo-400 tracking-wider border-b border-white/5 pb-2">
+              Section 2 — BG Owner / Hierarchy
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="First Owner (Requester Name)" required>
+                <input name="requesterName" value={form.requesterName} onChange={handleChange} placeholder="Name of the BG owner / requester" className={inputCls} />
+              </Field>
+              <Field label="Alternate of First Owner (Superior Name)">
+                <input name="superiorName" value={form.superiorName} onChange={handleChange} placeholder="Reporting manager / superior name" className={inputCls} />
+              </Field>
+            </div>
+          </div>
+
+          {/* SECTION 3: BG Details */}
+          <div className="bg-glass-card rounded-2xl p-5 border border-white/10 space-y-4">
+            <h2 className="text-xs font-mono font-bold uppercase text-indigo-400 tracking-wider border-b border-white/5 pb-2">
+              Section 3 — Bank Guarantee Particulars
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Name of the Party (Beneficiary)" required>
+                <input name="partyName" value={form.partyName} onChange={handleChange} placeholder="Beneficiary organization / client name" className={inputCls} />
+              </Field>
+              <Field label="Nature of RG / BG Type" required>
+                <select name="natureOfBG" value={form.natureOfBG} onChange={handleChange} className={selectCls}>
+                  {NATURE_OPTIONS.map(n => <option key={n} value={n} className="bg-[#060814]">{n}</option>)}
+                </select>
+              </Field>
+              <Field label="BG Amount (₹)" required>
+                <input type="number" name="bgAmount" value={form.bgAmount} onChange={handleChange} placeholder="Amount in ₹" className={inputCls} />
+                {bgAmt > 0 && (
+                  <p className={`text-[11px] mt-1 font-mono ${needsBoard ? "text-amber-400" : needsMD ? "text-cyan-400" : "text-slate-400"}`}>
+                    {needsBoard ? "⚠ Board Approval required (> ₹15 Lakhs)" : needsMD ? "ℹ MD Approval required (≤ ₹15 Lakhs)" : ""}
+                  </p>
+                )}
+              </Field>
+              <Field label="BG Expiry Date" required>
+                <input type="date" name="bgExpiryDate" value={form.bgExpiryDate} onChange={handleChange} className={inputCls} />
+              </Field>
+              <Field label="BG Claim Period" required>
+                <input name="claimPeriod" value={form.claimPeriod} onChange={handleChange} placeholder="e.g. 3 Months, 1 Year" className={inputCls} />
+              </Field>
+              <Field label="Remarks">
+                <textarea name="remarks" value={form.remarks} onChange={handleChange} rows={2} placeholder="Any additional instructions or notes…" className={inputCls + " resize-none"} />
+              </Field>
+            </div>
+          </div>
+
+          {/* SECTION 4: Mandatory Attachments */}
+          <div className="bg-glass-card rounded-2xl p-5 border border-amber-500/20 space-y-4">
+            <div className="flex items-start justify-between border-b border-white/5 pb-2">
+              <h2 className="text-xs font-mono font-bold uppercase text-amber-400 tracking-wider">
+                Section 4 — Mandatory Attachments
+              </h2>
+              <span className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                Required by policy
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 text-xs text-amber-200 space-y-1">
+              <p className="font-semibold text-amber-300">Attachment Rules:</p>
+              <p>• <strong>I. BG Vetted Draft</strong> (Word format) — always required</p>
+              <p>• <strong>II. MD Approval</strong> — required only when BG Amount ≤ ₹15 Lakhs</p>
+              <p>• <strong>III. Board Approval</strong> — required only when BG Amount {">"} ₹15 Lakhs</p>
+              <p>• <strong>IV. Beneficiary Advertisement / BC Requirements Clause</strong></p>
+              <p>• <strong>V. Beneficiary Bank Account Details</strong></p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FileInput name="bgDraft" label="I. BG Vetted Draft" hint="Word format" required />
+
+              {needsMD && (
+                <FileInput name="mdApproval" label="II. MD Approval" hint="Required for BG ≤ ₹15L" required />
+              )}
+              {needsBoard && (
+                <FileInput name="boardApproval" label="III. Board Approval" hint="Required for BG > ₹15L" required />
+              )}
+              {!needsMD && !needsBoard && (
+                <>
+                  <FileInput name="mdApproval" label="II. MD Approval" hint="Mandatory if BG ≤ ₹15L" />
+                  <FileInput name="boardApproval" label="III. Board Approval" hint="Mandatory if BG > ₹15L" />
+                </>
+              )}
+              <FileInput name="beneficiaryClause" label="IV. Beneficiary Advt. / BC Requirements Clause" />
+              <FileInput name="bankDetails" label="V. Beneficiary Bank Account Details" />
+            </div>
+          </div>
+
+          {/* SUBMIT */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button type="button" onClick={() => navigate("/dashboard")}
+              className="px-5 py-2.5 rounded-xl btn-outline-3d text-sm font-semibold cursor-pointer">
+              Cancel
             </button>
-          </div>
-        )}
-
-        {/* APPLICATION FORM */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* SECTION 1 */}
-          <div className="bg-glass-card p-6 sm:p-7 rounded-3xl border border-white/10 space-y-5">
-            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-              <span className="w-7 h-7 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-xs">
-                01
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-white">Contract Particulars</h3>
-                <p className="text-[11px] text-slate-400">Departmental ownership and operating location</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Department *</label>
-                <select
-                  name="department"
-                  value={formData.department}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white text-xs focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="">Select Department</option>
-                  <option value="Finance & Accounts">Finance & Accounts</option>
-                  <option value="Procurement & Contracts">Procurement & Contracts</option>
-                  <option value="Operations & Projects">Operations & Projects</option>
-                  <option value="Legal & Compliance">Legal & Compliance</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Site / Location *</label>
-                <input
-                  type="text"
-                  name="location"
-                  placeholder="e.g. Mumbai Refinery Site"
-                  value={formData.location}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Date of Request *</label>
-                <input
-                  type="date"
-                  name="requestDate"
-                  value={formData.requestDate}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Work Order / Tender No. *</label>
-                <input
-                  type="text"
-                  name="workOrder"
-                  placeholder="e.g. WO-2026-ENG-847"
-                  value={formData.workOrder}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Nature of Work *</label>
-                <input
-                  type="text"
-                  name="typeOfWork"
-                  placeholder="e.g. Civil Construction, Supply"
-                  value={formData.typeOfWork}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Total Contract Value (₹)</label>
-                <input
-                  type="number"
-                  name="jobValue"
-                  placeholder="120000000"
-                  value={formData.jobValue}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION 2 */}
-          <div className="bg-glass-card p-6 sm:p-7 rounded-3xl border border-white/10 space-y-5">
-            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-              <span className="w-7 h-7 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center font-bold text-xs">
-                02
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-white">Bank Guarantee Terms & Exposure</h3>
-                <p className="text-[11px] text-slate-400">Guaranteed sum, validity tenor, and beneficiary</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Beneficiary / Party Name *</label>
-                <input
-                  type="text"
-                  name="partyName"
-                  placeholder="e.g. Bharat Petroleum Corp Ltd"
-                  value={formData.partyName}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Nature of BG *</label>
-                <select
-                  name="nature"
-                  value={formData.nature}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white text-xs focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="">Select BG Type</option>
-                  <option value="Performance Bank Guarantee">Performance Bank Guarantee (PBG)</option>
-                  <option value="Advance Payment Guarantee">Advance Payment Guarantee (APG)</option>
-                  <option value="Earnest Money Deposit">Earnest Money Deposit (EMD)</option>
-                  <option value="Financial Guarantee">Financial Guarantee</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">BG Amount (₹) *</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 15000000"
-                  value={bgAmount}
-                  onChange={(e) => setBgAmount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs font-mono focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Expiry Date *</label>
-                <input
-                  type="date"
-                  name="expiryDate"
-                  value={formData.expiryDate}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white text-xs focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Claim Period</label>
-                <input
-                  type="text"
-                  name="claimPeriod"
-                  placeholder="e.g. 6 Months from expiry"
-                  value={formData.claimPeriod}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Approving Superior</label>
-                <input
-                  type="text"
-                  name="superior"
-                  placeholder="e.g. General Manager (Finance)"
-                  value={formData.superior}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d1c] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* SECTION 3: ATTACHMENTS */}
-          <div className="bg-glass-card p-6 sm:p-7 rounded-3xl border border-white/10 space-y-5">
-            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-              <span className="w-7 h-7 rounded-xl bg-violet-600/20 text-violet-400 flex items-center justify-center font-bold text-xs">
-                03
-              </span>
-              <div>
-                <h3 className="text-sm font-bold text-white">Supporting Documents</h3>
-                <p className="text-[11px] text-slate-400">PDF, Word, or contract certificates</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: "BG Draft Text", name: "bgDraft", icon: "📄" },
-                { label: "Internal Approvals", name: "approvalFile", icon: "✍️" },
-                { label: "Beneficiary Clause", name: "beneficiaryClause", icon: "⚖️" },
-                { label: "Bank Account Details", name: "bankDetails", icon: "🏦" },
-              ].map((doc) => (
-                <div
-                  key={doc.name}
-                  className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex flex-col justify-between text-center hover:border-indigo-500/30 transition"
-                >
-                  <span className="text-2xl mb-1.5">{doc.icon}</span>
-                  <span className="text-xs font-semibold text-white mb-2">{doc.label}</span>
-                  <label className="py-1.5 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-[11px] font-semibold cursor-pointer transition border border-indigo-500/30">
-                    Browse File
-                    <input type="file" name={doc.name} onChange={handleFileChange} className="hidden" />
-                  </label>
-                  {formData[doc.name] && (
-                    <span className="text-[10px] text-emerald-400 mt-2 truncate">
-                      ✓ {formData[doc.name].name}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* SUBMIT BUTTON */}
-          <div className="flex justify-end pt-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="py-3 px-8 rounded-2xl btn-primary-3d text-sm font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {submitting ? "Transmitting Docket..." : "Submit BG Requisition →"}
+            <button type="submit" disabled={loading}
+              className="px-6 py-2.5 rounded-xl btn-primary-3d text-sm font-semibold flex items-center gap-2 cursor-pointer">
+              {loading ? "Submitting…" : (<><span>Submit BG Request</span><span>→</span></>)}
             </button>
           </div>
         </form>
